@@ -45,15 +45,15 @@ class Store:
             r=c.execute('SELECT paused FROM state WHERE chat=?',(chat,)).fetchone();return bool(r and r[0])
     def pause(self,chat,value):
         with self.tx() as c:c.execute('INSERT INTO state(chat,paused) VALUES(?,?) ON CONFLICT(chat) DO UPDATE SET paused=excluded.paused',(chat,int(value)))
-    def reserve(self,chat,day,interval,limit,now=None):
+    def reserve(self,chat,day,interval,limit,now=None,cost=1):
         now=time.time() if now is None else now
         with self.tx() as c:
             c.execute('INSERT OR IGNORE INTO state(chat) VALUES(?)',(chat,))
             r=c.execute('SELECT * FROM state WHERE chat=?',(chat,)).fetchone()
             if r['paused'] or now-r['last_attempt']<interval:return False
             c.execute('INSERT OR IGNORE INTO usage(day) VALUES(?)',(day,))
-            if c.execute('SELECT n FROM usage WHERE day=?',(day,)).fetchone()[0]>=limit:return False
-            c.execute('UPDATE usage SET n=n+1 WHERE day=?',(day,));c.execute('UPDATE state SET last_attempt=? WHERE chat=?',(now,chat))
+            if limit and c.execute('SELECT n FROM usage WHERE day=?',(day,)).fetchone()[0]+cost>limit:return False
+            c.execute('UPDATE usage SET n=n+? WHERE day=?',(cost,day));c.execute('UPDATE state SET last_attempt=? WHERE chat=?',(now,chat))
             return True
     def remember(self,chat,text):
         if not 1<=len(text)<=600:raise ValueError('Память: 1..600 символов')
